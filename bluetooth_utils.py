@@ -27,6 +27,7 @@ import fcntl
 import array
 import socket
 from errno import EALREADY
+import threading
 
 # import PyBluez
 import bluetooth._bluetooth as bluez
@@ -258,7 +259,7 @@ def stop_le_advertising(sock):
 
 
 def parse_le_advertising_events(sock, mac_addr=None, packet_length=None,
-                                handler=None, debug=False):
+                                handler=None, debug=False, control_event:threading.Event=None):
     """
     Parse and report LE advertisements.
 
@@ -288,6 +289,9 @@ def parse_le_advertising_events(sock, mac_addr=None, packet_length=None,
     """
     if not debug and handler is None:
         raise ValueError("You must either enable debug or give a handler !")
+    
+    if control_event is not None and not isinstance(control_event,threading.Event):
+        raise ValueError("controle_even must be a threading Event")
 
     old_filter = sock.getsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, 14)
 
@@ -349,8 +353,12 @@ def parse_le_advertising_events(sock, mac_addr=None, packet_length=None,
                     print('Exception when calling handler with a BLE advertising event: %r' % (e,))
                     import traceback
                     traceback.print_exc()
+            if control_event != None and control_event.is_set():
+                print("\nRestore previous socket filter")
+                sock.setsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, old_filter)
+                break
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\nRestore previous socket filter")
         sock.setsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, old_filter)
         raise
